@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>video</title>
+    <style>
+        *{margin:0;padding:0;list-style: none;box-sizing: border-box;}
+        /*body{background:#d0d8e9;}*/
+        /*要么不加position，如果加了则必须同时设置body和height高度为100%*/
+        html,body{
+            background:#d0d8e9;
+            position: relative;
+            height:100%;
+            
+        }
+        .box{width:540px;height:332px;box-shadow:0 0 4px #d0d8e9;position: absolute;left:38%;top:50%;margin:-166px 0 0 -270px;}
+        .desc{width:250px;height:332px;box-shadow:0 0 4px #d0d8e9;position: absolute;left:83%;top:50%;margin:-166px 0 0 -270px;}
+
+        .videoNode{width:540px;height:305px;/*float布局可以清除上下间的空隙*/float:left;background-color: #000;}
+        .ctrNode{width:540px;height:34px;/*gif格式容量更小*/background-color:#000;float:left;}    
+        .playNode{float:left;width:20px;height:20px;margin:6px 0 0 14px;/*png更清晰*/background:transparent url(resources/controls.svg);background-position:0 0;cursor:pointer;}
+        .pauseNode{float:left;width:20px;height:20px;margin:6px 0 0 14px;/*png更清晰*/background:transparent url(resources/controls.svg);background-position:-20px 0;cursor:pointer;}
+        /* 上方状态栏 */
+        .statusNode{width:540px;height:80px;padding:0 10px;background:#000;clear: both;}
+        #mainChart {
+            width: 520px;
+            height: 70px;
+        }
+        /*时间进度条部分*/
+        .processNode{width:520px;height:9px;background-color:rgba(50,50,50,.8);float:left;position: relative;}
+        .processLeft{position: absolute;left:-2px;top:0;background:rgb(67, 155, 255);width:4px;height:9px;}
+        .processRight{position: absolute;right:-2px;top:0;background:orangered;width:4px;height:9px;}
+        .processCircle{position: absolute;left:-8.5px;top:-1px;background:hsla(0,0%,100%,.99);width:12px;height:12px;border-radius:50%;cursor:pointer;z-index:5;}
+        .lineNode{width:0%;height:100%;position: absolute;top:0;left:0;background:hsla(0,0%,100%,.8);}
+        .lineRight{position: absolute;width:2px;height:7px;top:0;right:0;background:blueviolet;}
+
+        /*声音进度条部分*/
+        .timeNode{float:left;width:57px;height:10px;margin:10px 0 0 9px;}
+        .timeNode span{float:left;line-height:10px;font-size:10px;color:#fff;}
+        .volumeNode{width:19px;height:17px;float:left;margin:6px 10px 0 17px;background:transparent url(resources/controls.svg);background-position: -60px 0;}
+        .vProcessNode{width:61px;height:9px;/*background:url(data/probg.gif) top repeat-x;*/margin:9px 0 0 4px;float:left;position: relative;}
+        .vLineNode{width:61px;height:100%;position: absolute;top:1px;left:0;background:hsla(0,0%,100%,.8);}
+        .vLineRight{position: absolute;width:2px;height:7px;top:0;right:0;background:blueviolet;}
+        #vCircleNode{left:52px;}
+
+        /*全屏部分*/
+        .fullNode{width:20px;height:20px;background:transparent url(resources/controls.svg);background-position:-80px 0;margin:6px 0 0 40px;float:left;cursor:pointer;}
+        .fullNode:hover{transform:scale(1.1);/*transition:all .5s;*/}
+
+        /*时间控件*/
+        .notice {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <video class="videoNode" src="resources/video.mp4" poster="resources/video.jpg"></video>
+        <div class="statusNode">
+            <div id="mainChart"></div>
+            <div class="processNode">
+                <!-- <div class="processLeft"></div> -->
+                <!-- <div class="processRight"></div> -->
+                <div class="processCircle" id="circleNode"></div>
+                <!-- 真正的进度条 -->
+                <div class="lineNode">
+                    <div class="lineRight"></div>
+                </div>
+            </div>
+        </div>
+        <!-- 时间调节 -->
+        
+        <div class="ctrNode">
+            <!-- 声音播放 -->
+            <div class="playNode"></div>
+            
+            <!-- 时间显示 -->
+            <div class="timeNode">
+                <span class="now">00:00</span>
+                <span>-</span>
+                <span class="all">00:00</span>
+            </div>
+            <div class="volumeNode"></div>
+            <!-- 音量调节 -->
+            <div class="vProcessNode">
+                <!-- <div class="processLeft"></div> -->
+                <!-- <div class="processRight"></div> -->
+                <div class="processCircle" id="vCircleNode"></div>
+                <!-- 真正的进度条 -->
+                <div class="vLineNode">
+                    <div class="vLineRight"></div>
+                </div>
+            </div>
+            <!-- 全屏 -->
+            <div class="fullNode"></div>
+        </div>
+    </div>
+    <div class="desc">
+        <p class="notice">Click the timestamps below to the start location of the according clips.</p>
+        <h3>Timestamps</h3>
+        <ul class="timelist">
+            <!-- 时间单位是s -->
+           <li><a data-start="30" href="#">00:30-00:50</a></li>
+           <li><a data-start="90" href="#">01:30-01:50</a></li>
+           <li><a data-start="150" href="#">02:30-02:50</a></li>
+        </ul>
+    </div>
+    <script src="resources/echarts.common.js"></script>
+    <!-- player action -->
+    <script>
+        var playNode=document.getElementsByClassName("playNode")[0],
+            videoNode=document.getElementsByClassName("videoNode")[0],
+            fullNode=document.querySelector(".fullNode"),
+            // 声音显示
+            nowNode=document.querySelector(".now"),
+            allNode=document.querySelector(".all"),
+            // 时间进度条
+            processNode=document.querySelector(".processNode"),
+            lineNode=document.querySelector(".lineNode"),
+            circleNode=document.querySelector("#circleNode"),
+            processCircle=document.querySelector("#processCircle"),
+            // 声音进度条
+            vProcessNode=document.querySelector(".vProcessNode"),
+            vLineNode=document.querySelector(".vLineNode"),
+            // 时间戳
+            vTimelist=document.querySelector(".timelist"),
+
+            playState=true,
+            firstClick=true;
+
+        // 播放暂停
+        playNode.onclick=function(){
+            if(firstClick) {
+                console.log("...")
+                var duration=videoNode.duration;
+                var aMin=toDou(parseInt(duration/60));
+                var aSec=toDou(parseInt(duration%60));
+                var data=[]
+                initMyChart(duration, data)
+                allNode.innerHTML=aMin+":"+aSec;
+                firstClick=false
+            }
+            //es6语法
+            //注意：要切换的样式一定要在初始样式的下面定义，否则无法进行覆盖
+            //this.classList.toggle("pauseNode");
+
+            //传统语法
+            playState=!playState;
+            if(playState){
+                this.className="playNode";
+                videoNode.pause();
+            }else{
+                this.className="pauseNode";
+                videoNode.play();
+            }
+        }
+
+        //全屏
+        fullNode.onclick=function(){
+            if(videoNode.webkitRequestFullscreen){
+                videoNode.webkitRequestFullscreen();
+            }else if(videoNode.mozRequestFullScreen){
+                videoNode.mozRequestFullScreen();
+            }else{
+                videoNode.requestFullscreen();
+            }
+        }
+        
+        //时间显示（解决时间初始的NaN问题）
+        videoNode.addEventListener("canplay",function(){
+            console.log("...")
+            var duration=videoNode.duration;
+            var aMin=toDou(parseInt(duration/60));
+            var aSec=toDou(parseInt(duration%60));
+            var data=[]
+            initMyChart(duration, data)
+            allNode.innerHTML=aMin+":"+aSec;
+        },false);
+
+        //视频播放时，更新当前时间
+        videoNode.addEventListener("timeupdate",function(){
+            var curTime=videoNode.currentTime;
+
+            var cMin=toDou(parseInt(curTime/60));
+            var cSec=toDou(parseInt(curTime%60));
+
+            nowNode.innerHTML=cMin+":"+cSec;
+
+            //进度条运动
+            lineNode.style.width=(curTime/videoNode.duration*100)+"%";
+            circleNode.style.left=lineNode.offsetWidth-8.5+"px";
+            
+        },false);
+
+        //时间格式转换
+        function toDou(time){
+            return time<10?"0"+time:time;
+        }
+
+        //拖拽进度条
+        circleNode.onmousedown=function(e){
+            videoNode.pause();
+            var el=e||event;//有些IE版本无法获取事件对象e，只能通过window.event来获取
+
+            //offsetLeft是一个元素到父级左边的距离
+            //clientX返回当事件被触发时鼠标指针相对于浏览器页面（或客户区）的水平坐标
+            //l是还没运动时，circleNode中心点距离屏幕左边的距离
+            var l=el.clientX-this.offsetLeft;
+
+            //将鼠标移动和抬起事件绑定在document上是为了防止鼠标拖动过快，超出拖动的元素，不能正常拖动和抬起无效，鼠标再次移入的时候会出现问题。
+            //如果绑定到crlNode，鼠标移动过快的时候，移出这个元素，就不能正常的拖动
+            document.onmousemove=function(e){
+                var el=e||event;
+
+                //el.clientX是鼠标按下位置距离浏览器页面（或客户区）的水平位置
+                //needX是circleNode距离初始位置移动的距离
+                var needX=el.clientX-l;
+
+                //控制左右边界
+                var maxX=processNode.offsetWidth-8.5;
+                needX=needX<-8.5?-8.5:needX;
+                needX=needX>maxX?maxX:needX;
+
+                //offsetLeft是只读模式，改变位置要用style.left
+                circleNode.style.left=needX+"px";
+
+                //进度跟着走
+                //+9是为了保证左右两端分别是0和1
+                lineNode.style.width=(circleNode.offsetLeft+9)/processNode.offsetWidth*100+"%";
+                
+            }
+            document.onmouseup=function(){
+                //鼠标松开时清除事件
+                document.onmousemove=document.onmouseup=null;
+
+                videoNode.currentTime=videoNode.duration*(circleNode.offsetLeft+9)/processNode.offsetWidth;
+                videoNode.play();
+                playState=false;
+
+                if(playState){
+                    playNode.className="playNode";
+                    videoNode.pause();
+                }else{
+                    playNode.className="pauseNode";
+                    videoNode.play();
+                }
+            }
+            return false;//阻止默认事件
+        }
+
+        //拖拽声音
+        vCircleNode.onmousedown=function(e){
+            var el=e||event;
+            var l=el.clientX-this.offsetLeft;
+
+            document.onmousemove=function(e){
+                var el=e||event;
+                var needX=el.clientX-l;
+
+                var maxX=vProcessNode.offsetWidth-9;
+                needX=needX<-8.5?-8.5:needX;
+                needX=needX>maxX?maxX:needX;
+
+                vCircleNode.style.left=needX+"px";
+                vLineNode.style.width=(vCircleNode.offsetLeft+9)/vProcessNode.offsetWidth*100+"%";
+
+                var toVolume=(vCircleNode.offsetLeft+9)/vProcessNode.offsetWidth;
+                toVolume=toVolume<0?0:toVolume;
+                videoNode.volume=toVolume;
+            }
+            document.onmouseup=function(){
+                document.onmousemove=document.onmouseup=null;
+            }
+            return false;
+        }
+
+        // 点击时间戳
+        vTimelist.addEventListener("click", function(e){
+            var ev = ev || window.event;
+    　　　　 var target = ev.target || ev.srcElement;
+    　　　　 if(target.nodeName.toLowerCase() == 'a'){
+                var timeStart=+target.getAttribute("data-start")
+                // 视频时间跳转
+                videoNode.currentTime=timeStart
+                videoNode.play();
+                playState=false;
+
+                if(playState){
+                    playNode.className="playNode";
+                    videoNode.pause();
+                }else{
+                    playNode.className="pauseNode";
+                    videoNode.play();
+                }
+    　　　　 }
+        })
+
+        function initMyChart(duration,data) {
+            // todo
+            console.log("initmychart...",duration)
+            // 基于准备好的dom，初始化echarts实例
+            var myChart = echarts.init(document.getElementById('mainChart'));
+
+            // var base = +new Date(1968, 9, 3);
+            // var oneDay = 24 * 3600 * 1000;
+            // var date = [];
+
+            // var data = [Math.random() * 300];
+
+            // for (var i = 1; i < 20000; i++) {
+            //     var now = new Date(base += oneDay);
+            //     date.push([now.getFullYear(), now.getMonth() + 1, now.getDate()].join('/'));
+            //     data.push(Math.round((Math.random() - 0.5) * 20 + data[i - 1]));
+            // }
+            // 模拟数据
+            // var times=[[0,1], [1, 2], [2, 1], [3, 3], [4, 1], [5, 1],
+            // [6, 1], [7, 1], [8, 2], [9, 1],[10,2],
+            // [11, 2], [12, 1], [13, 3], [14, 1], [15, 1],
+            // [16, 1], [17, 1], [18, 2], [19, 1],[20,1],
+            // [21, 2], [22, 1], [23, 3], [24, 1], [25, 1],
+            // [26, 1], [27, 1], [28, 2], [29, 1], [30,1],
+            // [31, 2], [32, 1], [33, 3], [34, 1], [35, 1],
+            // [36, 1], [37, 1], [38, 2], [39, 1], [40,1],
+            // ];
+            var times = []
+            for(var i=0; i<duration.length; i++) {
+                times.push([i,Math.round(Math.random())*20])
+            }
+            option = {
+                grid: {
+                    left: '0px',
+                    right: '0px',
+                    // bottom: '0px',
+                },
+                xAxis: {
+                    show: false,
+                    type: 'value',
+                },
+                yAxis: {
+                    show: false,
+                    type: 'value',
+                    boundaryGap: [0, '100%']
+                },
+                series: [
+                    {
+                        name: '模拟数据',
+                        type: 'line',
+                        smooth: true,
+                        symbol: 'none',
+                        sampling: 'average',
+                        itemStyle: {
+                            color: 'rgb(255, 70, 131)'
+                        },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
+                                offset: 0,
+                                color: 'rgb(255, 158, 68)'
+                            }, {
+                                offset: 1,
+                                color: 'rgb(255, 70, 131)'
+                            }])
+                        },
+                        data: times
+                    }
+                ]
+            };
+            // 使用刚指定的配置项和数据显示图表。
+            myChart.setOption(option);
+        }
+    </script>
+</body>
+</html>
